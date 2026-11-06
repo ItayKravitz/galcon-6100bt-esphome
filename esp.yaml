@@ -1,0 +1,438 @@
+esphome:
+  name: galcon-6100bt
+  friendly_name: Galcon 6100BT Controller
+  min_version: 2025.9.0
+  name_add_mac_suffix: false
+
+esp32:
+  variant: esp32
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: XX.XX.XX.XX
+    gateway: XX.XX.XX.XX
+    subnet: 255.255.255.0
+
+esp32_ble_tracker:
+  scan_parameters:
+    duration: 10s
+    interval: 320ms
+    window: 30ms
+    active: true
+    continuous: true
+
+ble_client:
+  - mac_address: "35:44:31:38:36:39"
+    id: galcon_client
+    auto_connect: true
+    on_connect:
+      - logger.log: "Galcon Connected"
+      - delay: 1s
+    on_disconnect:
+      - logger.log: "Galcon Disconnected"
+
+globals:
+  - id: valve_bitmask
+    type: int
+    restore_value: false
+    initial_value: '0'
+
+binary_sensor:
+  - platform: template
+    name: "Galcon BLE Status"
+    id: galcon_ble_connected
+    lambda: |-
+      return id(galcon_client).connected();
+
+  - platform: template
+    name: "Galcon Valve 1 Open"
+    id: valve1_open
+    device_class: opening
+    lambda: 'return (id(valve_bitmask) & 0x02) != 0;'
+
+  - platform: template
+    name: "Galcon Valve 2 Open"
+    id: valve2_open
+    device_class: opening
+    lambda: 'return (id(valve_bitmask) & 0x04) != 0;'
+
+  - platform: template
+    name: "Galcon Valve 3 Open"
+    id: valve3_open
+    device_class: opening
+    lambda: 'return (id(valve_bitmask) & 0x08) != 0;'
+
+  - platform: template
+    name: "Galcon Valve 4 Open"
+    id: valve4_open
+    device_class: opening
+    lambda: 'return (id(valve_bitmask) & 0x10) != 0;'
+
+  - platform: template
+    name: "Galcon Valve 5 Open"
+    id: valve5_open
+    device_class: opening
+    lambda: 'return (id(valve_bitmask) & 0x20) != 0;'
+
+  - platform: template
+    name: "Galcon Valve 6 Open"
+    id: valve6_open
+    device_class: opening
+    lambda: 'return (id(valve_bitmask) & 0x40) != 0;'
+
+button:
+  - platform: restart
+    name: "Restart ESP32"
+    id: restart_esp
+
+sensor:
+  - platform: ble_rssi
+    mac_address: "35:44:31:38:36:39"
+    name: "Galcon BLE RSSI"
+
+  - platform: wifi_signal
+    name: "ESP32 WiFi Signal"
+    update_interval: 30s
+
+  - platform: uptime
+    name: "ESP32 Uptime"
+
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: galcon_client
+    service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+    characteristic_uuid: "20900102-bdee-493a-aa74-a8137c9d43f0"
+    name: "Galcon Active Valve"
+    id: galcon_active_valve
+    update_interval: 15s
+    lambda: |-
+      id(valve_bitmask) = x[8];
+      id(valve1_open).publish_state((x[8] & 0x02) != 0);
+      id(valve2_open).publish_state((x[8] & 0x04) != 0);
+      id(valve3_open).publish_state((x[8] & 0x08) != 0);
+      id(valve4_open).publish_state((x[8] & 0x10) != 0);
+      id(valve5_open).publish_state((x[8] & 0x20) != 0);
+      id(valve6_open).publish_state((x[8] & 0x40) != 0);
+      if (x[0] != 0xF5) return 0.0f;
+      for (int v = 1; v <= 6; v++) {
+        if (x[8] & (1 << v)) return (float)v;
+      }
+      return 0.0f;
+    unit_of_measurement: ""
+    accuracy_decimals: 0
+
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: galcon_client
+    service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+    characteristic_uuid: "20900102-bdee-493a-aa74-a8137c9d43f0"
+    name: "Galcon Timer Remaining"
+    id: galcon_timer
+    update_interval: 30s
+    lambda: 'return (float)x[2];'
+    unit_of_measurement: "min"
+    accuracy_decimals: 0
+
+interval:
+  - interval: 5s
+    then:
+      - ble_client.ble_write:
+          id: galcon_client
+          service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+          characteristic_uuid: "20900106-bdee-493a-aa74-a8137c9d43f0"
+          value: [0x02, 0x00]
+
+switch:
+  - platform: template
+    name: "Galcon Valve 1"
+    id: valve_1
+    optimistic: true
+
+    turn_on_action:
+      - logger.log: "Valve 1 Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 1 Sending OPEN command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x00, 0x81, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 1 OPENED"
+          else:
+            - logger.log: "Valve 1 Connection timeout"
+
+    turn_off_action:
+      - logger.log: "Valve 1 Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 1 Sending CLOSE command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 1 CLOSED"
+          else:
+            - logger.log: "Valve 1 Connection timeout"
+
+  - platform: template
+    name: "Galcon Valve 2"
+    id: valve_2
+    optimistic: true
+
+    turn_on_action:
+      - logger.log: "Valve 2 Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 2 Sending OPEN command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x00, 0x82, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 2 OPENED"
+          else:
+            - logger.log: "Valve 2 Connection timeout"
+
+    turn_off_action:
+      - logger.log: "Valve 2 Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 2 Sending CLOSE command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 2 CLOSED"
+          else:
+            - logger.log: "Valve 2 Connection timeout"
+
+  - platform: template
+    name: "Galcon Valve 3"
+    id: valve_3
+    optimistic: true
+
+    turn_on_action:
+      - logger.log: "Valve 3 Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 3 Sending OPEN command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x00, 0x83, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 3 OPENED"
+          else:
+            - logger.log: "Valve 3 Connection timeout"
+
+    turn_off_action:
+      - logger.log: "Valve 3 Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 3 Sending CLOSE command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 3 CLOSED"
+          else:
+            - logger.log: "Valve 3 Connection timeout"
+
+  - platform: template
+    name: "Galcon Valve 4"
+    id: valve_4
+    optimistic: true
+
+    turn_on_action:
+      - logger.log: "Valve 4: Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 4: Sending OPEN command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x00, 0x84, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 4: OPENED"
+          else:
+            - logger.log: "Valve 4 Connection timeout"
+
+    turn_off_action:
+      - logger.log: "Valve 4: Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 4 Sending CLOSE command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 4 CLOSED"
+          else:
+            - logger.log: "Valve 4 Connection timeout"
+
+  - platform: template
+    name: "Galcon Valve 5"
+    id: valve_5
+    optimistic: true
+
+    turn_on_action:
+      - logger.log: "Valve 5: Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 5: Sending OPEN command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x00, 0x85, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 5: OPENED"
+          else:
+            - logger.log: "Valve 5 Connection timeout"
+
+    turn_off_action:
+      - logger.log: "Valve 5: Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 5 Sending CLOSE command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 5 CLOSED"
+          else:
+            - logger.log: "Valve 5 Connection timeout"
+
+  - platform: template
+    name: "Galcon Valve 6"
+    id: valve_6
+    optimistic: true
+
+    turn_on_action:
+      - logger.log: "Valve 6: Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 6: Sending OPEN command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x00, 0x86, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 6: OPENED"
+          else:
+            - logger.log: "Valve 6 Connection timeout"
+
+    turn_off_action:
+      - logger.log: "Valve 6: Checking connection"
+      - wait_until:
+          timeout: 15s
+          condition:
+            lambda: return id(galcon_client).connected();
+      - if:
+          condition:
+            lambda: return id(galcon_client).connected();
+          then:
+            - logger.log: "Valve 6 Sending CLOSE command"
+            - ble_client.ble_write:
+                id: galcon_client
+                service_uuid: "20900100-bdee-493a-aa74-a8137c9d43f0"
+                characteristic_uuid: "20900103-bdee-493a-aa74-a8137c9d43f0"
+                value: [0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            - delay: 200ms
+            - logger.log: "Valve 6 CLOSED"
+          else:
+            - logger.log: "Valve 6 Connection timeout"
