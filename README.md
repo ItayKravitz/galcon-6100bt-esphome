@@ -1,11 +1,8 @@
 # galcon-6100bt-esphome
-An open-source ESPHome component for integrating Galcon 6100BT (and compatible Bluetooth irrigation controllers) with Home Assistant via an ESP32 BLE Gateway.
 
-About The Project
+An open-source ESPHome configuration for integrating Galcon 6100BT (and compatible BLE irrigation controllers) with Home Assistant via an ESP32 Gateway.
 
-Galcon 6100BT is a reliable irrigation controller, but its standalone Bluetooth functionality lacks native smart-home integration and remote control capabilities. 
-
-This project bridges that gap by using a low-cost ESP32 board running ESPHome. The ESP32 acts as a persistent Bluetooth proxy that listens to status packets and sends control commands directly to the Galcon controller, presenting full multi-valve control seamlessly inside Home Assistant.
+Instead of replacing a reliable Galcon controller with an expensive smart alternative, I reverse-engineered its BLE protocol. Using a low-cost ESP32 running ESPHome, this project acts as a local Bluetooth proxy, bringing full multi-valve control and status tracking seamlessly into Home Assistant.
 
 ## Features
 
@@ -28,5 +25,5 @@ Software:
 1. Clone or copy the `galcon-6100bt.yaml` configuration into your ESPHome directory.
 2. Create a `secrets.yaml` file (or add to your existing secrets) with your network parameters:
    ```yaml
-   wifi_ssid: "Your_WiFi_SSID"
-   wifi_password: "Your_WiFi_Password"
+     wifi_ssid: "Your_WiFi_SSID"
+     wifi_password: "Your_WiFi_Password"
