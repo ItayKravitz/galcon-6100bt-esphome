@@ -25,11 +25,11 @@ Instead of replacing a reliable Galcon controller with an expensive smart altern
 ### ⚠️ Important Note on Battery Life & Power
 
 The Galcon 6100BT controller requires a `keep-alive` signal sent every 5 seconds to maintain the BLE connection. Keeping the ESP32 active and polling constantly will drain the controller's batteries very quickly. 
-
 I suggest using one of the following approaches:
   Hardwired Power Mod: Power the controller and setup using a steady wired power supply (such as an 18V power source).
   Power Management: Power down or disable the ESP32 when watering operations or active monitoring are not required.
 
+## Quick Start & Installation
 1. Copy or clone the configuration file into your ESPHome directory.
 2. Create or update your `secrets.yaml` with your Wi-Fi credentials.
 3. Update the MAC address in the YAML configuration file to match your controller.
