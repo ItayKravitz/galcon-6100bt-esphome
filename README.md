@@ -22,8 +22,13 @@ Instead of replacing a reliable Galcon controller with an expensive smart altern
 **Software:**
 - Home Assistant with ESPHome Add-on installed.
 - Known MAC address of your Galcon controller (obtainable via nRF Connect app or ESP32 BLE scanner).
+### ⚠️ Important Note on Battery Life & Power
 
-## Quick Start & Installation
+The Galcon 6100BT controller requires a `keep-alive` signal sent every 5 seconds to maintain the BLE connection. Keeping the ESP32 active and polling constantly will drain the controller's batteries very quickly. 
+
+I suggest using one of the following approaches:
+  Hardwired Power Mod: Power the controller and setup using a steady wired power supply (such as an 18V power source).
+  Power Management: Power down or disable the ESP32 when watering operations or active monitoring are not required.
 
 1. Copy or clone the configuration file into your ESPHome directory.
 2. Create or update your `secrets.yaml` with your Wi-Fi credentials.
