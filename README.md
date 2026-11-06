@@ -25,5 +25,5 @@ Software:
 1. Clone or copy the `galcon-6100bt.yaml` configuration into your ESPHome directory.
 2. Create a `secrets.yaml` file (or add to your existing secrets) with your network parameters:
    ```yaml
-     wifi_ssid: "Your_WiFi_SSID"
-     wifi_password: "Your_WiFi_Password"
+   wifi_ssid: "Your_WiFi_SSID"
+   wifi_password: "Your_WiFi_Password"
